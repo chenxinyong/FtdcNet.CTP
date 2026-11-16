@@ -40,12 +40,15 @@ namespace CTP
         /// <summary>
         ///创建MdApi
         ///@param pszFlowPath 存贮订阅信息文件的目录，默认为当前目录
+        ///@param bIsUsingUdp 是否使用UDP行情
+        ///@param bIsMulticast 是否使用组播行情
+        ///@param bIsProductionMode 是否生产模式（6.7.11 起支持）
         ///@return 创建出的UserApi
         ///modify for udp marketdata
         /// </summary>
-        public FtdcMdAdapter(string pszFlowPath, bool bIsUsingUdp, bool bIsMulticast)
+        public FtdcMdAdapter(string pszFlowPath, bool bIsUsingUdp, bool bIsMulticast, bool bIsProductionMode = true)
         {
-            Handle = Interop.MdCreateApi(pszFlowPath, bIsUsingUdp, bIsMulticast);
+            Handle = Interop.MdCreateApi(pszFlowPath, bIsUsingUdp, bIsMulticast, bIsProductionMode);
             if (Handle == IntPtr.Zero)
                 throw new Exception("MdCreateApi Failed!");
             this.CbOnFrontDelegate = this.CbOnFrontFunc;

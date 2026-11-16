@@ -15,7 +15,8 @@ namespace CTP
         THOST_TERT_RESTART = 0,
         THOST_TERT_RESUME,
         THOST_TERT_QUICK,
-        THOST_TERT_NONE
+        THOST_TERT_NONE,
+        THOST_TERT_RESUME_FROM_SEQ_NO = 4
     };
 
     /// <summary>
@@ -369,7 +370,12 @@ namespace CTP
         /// <summary>
         /// 删除未知单
         /// </summary>
-        DeleteOrder = (byte)'F'
+        DeleteOrder = (byte)'F',
+
+        /// <summary>
+        /// 退出紧急状态
+        /// </summary>
+        ExitEmergency = (byte)'G',
     };
 
     /// <summary>
@@ -650,7 +656,12 @@ namespace CTP
         /// <summary>
         /// 银期签约解约
         /// </summary>
-        FBAccount = (byte)'X'
+        FBAccount = (byte)'X',
+
+        /// <summary>
+        /// 接收短信验证码
+        /// </summary>
+        RcvSMSCode = (byte)'Y',
     };
 
     /// <summary>
@@ -1295,7 +1306,22 @@ namespace CTP
         /// <summary>
         /// 风控强平不验证资金
         /// </summary>
-        Notverifycapital = (byte)'8'
+        Notverifycapital = (byte)'8',
+
+        /// <summary>
+        /// 本地强平资金不足
+        /// </summary>
+        LocalLackDeposit = (byte)'9',
+
+        /// <summary>
+        /// 本地强平违规持仓忽略敞口
+        /// </summary>
+        LocalViolationNocheck = (byte)'a',
+
+        /// <summary>
+        /// 本地强平违规持仓
+        /// </summary>
+        LocalViolation = (byte)'b',
     };
 
     /// <summary>
@@ -1661,7 +1687,12 @@ namespace CTP
         /// <summary>
         /// 收盘
         /// </summary>
-        Closed = (byte)'6'
+        Closed = (byte)'6',
+
+        /// <summary>
+        /// 交易业务处理
+        /// </summary>
+        TransactionProcessing = (byte)'7',
     };
 
     /// <summary>
@@ -2132,7 +2163,42 @@ namespace CTP
         /// <summary>
         /// 密码有效期
         /// </summary>
-        PasswordPeriod = (byte)'V'
+        PasswordPeriod = (byte)'V',
+
+        /// <summary>
+        /// 历史密码重复限制次数
+        /// </summary>
+        PwdHistoryCmp = (byte)'X',
+
+        /// <summary>
+        /// 转账是否验证预留银行账户
+        /// </summary>
+        TranferChkProperty = (byte)'i',
+
+        /// <summary>
+        /// 非交易时间异常报单校验参数
+        /// </summary>
+        TradeChkPhase = (byte)'j',
+
+        /// <summary>
+        /// 其他异常报单校验参数（价格和手数）
+        /// </summary>
+        TradeChkPriceVol = (byte)'k',
+
+        /// <summary>
+        /// 卖出垂直价差组合新算法
+        /// </summary>
+        NewBESMarginAlgo = (byte)'l',
+
+        /// <summary>
+        /// 大商所期货组合平仓冻结算法
+        /// </summary>
+        IsDceFutCloseFrozen = (byte)'m',
+
+        /// <summary>
+        /// 是否启用短信验证
+        /// </summary>
+        UseSMSVerify = (byte)'n',
     };
 
     /// <summary>
@@ -3232,7 +3298,12 @@ namespace CTP
         /// <summary>
         /// 其他
         /// </summary>
-        Other = (byte)'9'
+        Other = (byte)'9',
+
+        /// <summary>
+        /// 修改资金密码
+        /// </summary>
+        UpdateTradingAccountPassword = (byte)'a',
     };
 
     /// <summary>
@@ -8434,6 +8505,214 @@ namespace CTP
         /// 持仓量有变化
         /// </summary>
         PositionChange = (byte)'2'
+    };
+
+    /// <summary>
+    /// TFtdcPwdRcdSrcType是一个历史密码来源类型
+    /// </summary>
+    public enum EnumPwdRcdSrcType : byte
+    {
+        /// <summary>
+        /// 来源于Sync初始化数据
+        /// </summary>
+        Init = (byte)'0',
+
+        /// <summary>
+        /// 来源于实时上场数据
+        /// </summary>
+        Sync = (byte)'1',
+
+        /// <summary>
+        /// 来源于用户修改
+        /// </summary>
+        UserUpd = (byte)'2',
+
+        /// <summary>
+        /// 来源于超户修改，很可能来自主席同步数据
+        /// </summary>
+        SuperUserUpd = (byte)'3',
+
+        /// <summary>
+        /// 来源于次席同步的修改
+        /// </summary>
+        SecUpd = (byte)'4'
+    };
+
+    /// <summary>
+    /// TFtdcAddrSrvModeType是一个地址服务类型类型
+    /// </summary>
+    public enum EnumAddrSrvModeType : byte
+    {
+        /// <summary>
+        /// 交易地址
+        /// </summary>
+        Trade = (byte)'0',
+
+        /// <summary>
+        /// 行情地址
+        /// </summary>
+        MarketData = (byte)'1',
+
+        /// <summary>
+        /// 其他
+        /// </summary>
+        Other = (byte)'2'
+    };
+
+    /// <summary>
+    /// TFtdcAddrVerType是一个地址版本类型
+    /// </summary>
+    public enum EnumAddrVerType : byte
+    {
+        /// <summary>
+        /// IPV4
+        /// </summary>
+        V4 = (byte)'0',
+
+        /// <summary>
+        /// IPV6
+        /// </summary>
+        V6 = (byte)'1'
+    };
+
+    /// <summary>
+    /// TFtdcTGSessionQryStatusType是一个TGATE会话查询状态类型
+    /// </summary>
+    public enum EnumTGSessionQryStatusType : byte
+    {
+        /// <summary>
+        /// 查询状态空闲
+        /// </summary>
+        QryIdle = (byte)'1',
+
+        /// <summary>
+        /// 查询状态频繁
+        /// </summary>
+        QryBusy = (byte)'2'
+    };
+
+    /// <summary>
+    /// TFtdcOffsetTypeType是一个对冲类型类型
+    /// </summary>
+    public enum EnumOffsetTypeType : byte
+    {
+        /// <summary>
+        /// 期权对冲
+        /// </summary>
+        OPT_OFFSET = (byte)'0',
+
+        /// <summary>
+        /// 期货对冲
+        /// </summary>
+        FUT_OFFSET = (byte)'1',
+
+        /// <summary>
+        /// 行权后期货对冲
+        /// </summary>
+        EXEC_OFFSET = (byte)'2',
+
+        /// <summary>
+        /// 履约后期货对冲
+        /// </summary>
+        PERFORM_OFFSET = (byte)'3'
+    };
+
+    /// <summary>
+    /// TFtdcApplySrcType是一个申请来源类型
+    /// </summary>
+    public enum EnumApplySrcType : byte
+    {
+        /// <summary>
+        /// 交易
+        /// </summary>
+        Trade = (byte)'0',
+
+        /// <summary>
+        /// 会服
+        /// </summary>
+        Member = (byte)'1'
+    };
+
+    /// <summary>
+    /// TFtdcApplyStatusType是一个套利套保申请状态类型
+    /// </summary>
+    public enum EnumApplyStatusType : byte
+    {
+        /// <summary>
+        /// 未知
+        /// </summary>
+        Unknown = (byte)'a',
+
+        /// <summary>
+        /// 已撤销
+        /// </summary>
+        Canceled = (byte)'0',
+
+        /// <summary>
+        /// 已挂起
+        /// </summary>
+        Suspended = (byte)'1',
+
+        /// <summary>
+        /// 申请成功
+        /// </summary>
+        Accepted = (byte)'3'
+    };
+
+    /// <summary>
+    /// TFtdcCmbTypeType是一个组合定单类型，0类型
+    /// </summary>
+    public enum EnumCmbTypeType : byte
+    {
+        /// <summary>
+        /// SPZ
+        /// </summary>
+        SPZ = (byte)'0',
+
+        /// <summary>
+        /// SPD
+        /// </summary>
+        SPD = (byte)'1',
+
+        /// <summary>
+        /// IPS
+        /// </summary>
+        IPS = (byte)'2',
+
+        /// <summary>
+        /// BUL
+        /// </summary>
+        BUL = (byte)'3',
+
+        /// <summary>
+        /// BER
+        /// </summary>
+        BER = (byte)'4',
+
+        /// <summary>
+        /// BLT
+        /// </summary>
+        BLT = (byte)'5',
+
+        /// <summary>
+        /// BRT
+        /// </summary>
+        BRT = (byte)'6',
+
+        /// <summary>
+        /// STD
+        /// </summary>
+        STD = (byte)'7',
+
+        /// <summary>
+        /// STG
+        /// </summary>
+        STG = (byte)'8',
+
+        /// <summary>
+        /// PRT
+        /// </summary>
+        PRT = (byte)'9'
     };
 
 }; // end of namespace

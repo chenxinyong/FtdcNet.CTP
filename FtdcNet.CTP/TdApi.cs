@@ -56,11 +56,12 @@ namespace CTP
         /// <summary>
         ///创建TraderApi
         ///@param pszFlowPath 存贮订阅信息文件的目录，默认为当前目录
+        ///@param bIsProductionMode 是否生产模式（6.7.11 起支持）
         ///@return 创建出的UserApi
         /// </summary>
-        public FtdcTdAdapter(string pszFlowPath)
+        public FtdcTdAdapter(string pszFlowPath, bool bIsProductionMode = true)
         {
-            Handle = Interop.TdCreateApi(pszFlowPath);
+            Handle = Interop.TdCreateApi(pszFlowPath, bIsProductionMode);
             if (Handle == IntPtr.Zero)
                 throw new Exception("TdCreateApi Failed!");
             this.CbOnErrRtnDelegate = this.CbOnErrRtnFunc;
@@ -113,6 +114,15 @@ namespace CTP
         }
 
         /// <summary>
+        ///获取当前前置信息
+        ///@param pFrontInfo 由调用方分配，接口填充前置地址与流控信息
+        /// </summary>
+        public void GetFrontInfo(ThostFtdcFrontInfoField pFrontInfo)
+        {
+            Interop.TdGetFrontInfo(Handle, pFrontInfo);
+        }
+
+        /// <summary>
         ///注册前置机网络地址
         ///@param pszFrontAddress：前置机网络地址。
         ///@remark 网络地址的格式为：“protocol://ipaddress:port”，如：”tcp://127.0.0.1:17001”。
@@ -150,11 +160,13 @@ namespace CTP
         ///        THOST_TERT_RESTART:从本交易日开始重传
         ///        THOST_TERT_RESUME:从上次收到的续传
         ///        THOST_TERT_QUICK:只传送登录后私有流的内容
+        ///        THOST_TERT_RESUME_FROM_SEQ_NO:从指定序号开始重传
+        ///@param nSeqNo 仅 THOST_TERT_RESUME_FROM_SEQ_NO 使用，默认从 1 开始
         ///@remark 该方法要在Init方法前调用。若不调用则不会收到私有流的数据。
         /// </summary>
-        public void SubscribePrivateTopic(EnumTeResumeType nResumeType)
+        public void SubscribePrivateTopic(EnumTeResumeType nResumeType, int nSeqNo = 1)
         {
-            Interop.TdSubscribePrivateTopic(Handle, (int)nResumeType);
+            Interop.TdSubscribePrivateTopic(Handle, (int)nResumeType, nSeqNo);
         }
 
         /// <summary>
@@ -195,6 +207,22 @@ namespace CTP
         public int SubmitUserSystemInfo(ThostFtdcUserSystemInfoField pUserSystemInfo)
         {
             return Interop.TdSubmitUserSystemInfo(Handle, pUserSystemInfo);
+        }
+
+        /// <summary>
+        ///注册微信小程序用户终端信息（6.7.13）
+        /// </summary>
+        public int RegisterWechatUserSystemInfo(ThostFtdcWechatUserSystemInfoField pUserSystemInfo)
+        {
+            return Interop.TdRegisterWechatUserSystemInfo(Handle, pUserSystemInfo);
+        }
+
+        /// <summary>
+        ///上报微信小程序用户终端信息（6.7.13）
+        /// </summary>
+        public int SubmitWechatUserSystemInfo(ThostFtdcWechatUserSystemInfoField pUserSystemInfo)
+        {
+            return Interop.TdSubmitWechatUserSystemInfo(Handle, pUserSystemInfo);
         }
 
         /// <summary>
@@ -1075,6 +1103,118 @@ namespace CTP
         public int ReqQryInvestorProdRULEMargin(ThostFtdcQryInvestorProdRULEMarginField pQryInvestorProdRULEMargin, int nRequestID)
         {
             return Interop.TdReqQryInvestorProdRULEMargin(Handle, pQryInvestorProdRULEMargin, nRequestID);
+        }
+
+        /// <summary>
+        ///请求查询用户会话（6.7.13）
+        /// </summary>
+        public int ReqQryUserSession(ThostFtdcQryUserSessionField pQryUserSession, int nRequestID)
+        {
+            return Interop.TdReqQryUserSession(Handle, pQryUserSession, nRequestID);
+        }
+
+        /// <summary>
+        ///投资者新型组合保证金开关查询（6.7.13）
+        /// </summary>
+        public int ReqQryInvestorPortfSetting(ThostFtdcQryInvestorPortfSettingField pQryInvestorPortfSetting, int nRequestID)
+        {
+            return Interop.TdReqQryInvestorPortfSetting(Handle, pQryInvestorPortfSetting, nRequestID);
+        }
+
+        /// <summary>
+        ///投资者申报费阶梯收取记录查询（6.7.13）
+        /// </summary>
+        public int ReqQryInvestorInfoCommRec(ThostFtdcQryInvestorInfoCommRecField pQryInvestorInfoCommRec, int nRequestID)
+        {
+            return Interop.TdReqQryInvestorInfoCommRec(Handle, pQryInvestorInfoCommRec, nRequestID);
+        }
+
+        /// <summary>
+        ///组合腿信息查询（6.7.13）
+        /// </summary>
+        public int ReqQryCombLeg(ThostFtdcQryCombLegField pQryCombLeg, int nRequestID)
+        {
+            return Interop.TdReqQryCombLeg(Handle, pQryCombLeg, nRequestID);
+        }
+
+        /// <summary>
+        ///对冲设置请求（6.7.13）
+        /// </summary>
+        public int ReqOffsetSetting(ThostFtdcInputOffsetSettingField pInputOffsetSetting, int nRequestID)
+        {
+            return Interop.TdReqOffsetSetting(Handle, pInputOffsetSetting, nRequestID);
+        }
+
+        /// <summary>
+        ///对冲设置撤销请求（6.7.13）
+        /// </summary>
+        public int ReqCancelOffsetSetting(ThostFtdcInputOffsetSettingField pInputOffsetSetting, int nRequestID)
+        {
+            return Interop.TdReqCancelOffsetSetting(Handle, pInputOffsetSetting, nRequestID);
+        }
+
+        /// <summary>
+        ///投资者对冲设置查询（6.7.13）
+        /// </summary>
+        public int ReqQryOffsetSetting(ThostFtdcQryOffsetSettingField pQryOffsetSetting, int nRequestID)
+        {
+            return Interop.TdReqQryOffsetSetting(Handle, pQryOffsetSetting, nRequestID);
+        }
+
+        /// <summary>
+        ///申请短信验证码（6.7.13）
+        /// </summary>
+        public int ReqGenSMSCode(ThostFtdcReqGenSMSCodeField pReqGenSMSCode, int nRequestID)
+        {
+            return Interop.TdReqGenSMSCode(Handle, pReqGenSMSCode, nRequestID);
+        }
+
+        /// <summary>
+        ///套利确认申请（6.7.13）
+        /// </summary>
+        public int ReqSpdApply(ThostFtdcInputSpdApplyField pInputSpdApply, int nRequestID)
+        {
+            return Interop.TdReqSpdApply(Handle, pInputSpdApply, nRequestID);
+        }
+
+        /// <summary>
+        ///套利确认撤销（6.7.13）
+        /// </summary>
+        public int ReqSpdApplyAction(ThostFtdcInputSpdApplyActionField pInputSpdApplyAction, int nRequestID)
+        {
+            return Interop.TdReqSpdApplyAction(Handle, pInputSpdApplyAction, nRequestID);
+        }
+
+        /// <summary>
+        ///套利确认查询（6.7.13）
+        /// </summary>
+        public int ReqQrySpdApply(ThostFtdcQrySpdApplyField pQrySpdApply, int nRequestID)
+        {
+            return Interop.TdReqQrySpdApply(Handle, pQrySpdApply, nRequestID);
+        }
+
+        /// <summary>
+        ///套保确认申请（6.7.13）
+        /// </summary>
+        public int ReqHedgeCfm(ThostFtdcInputHedgeCfmField pInputHedgeCfm, int nRequestID)
+        {
+            return Interop.TdReqHedgeCfm(Handle, pInputHedgeCfm, nRequestID);
+        }
+
+        /// <summary>
+        ///套保确认撤销（6.7.13）
+        /// </summary>
+        public int ReqHedgeCfmAction(ThostFtdcInputHedgeCfmActionField pInputHedgeCfmAction, int nRequestID)
+        {
+            return Interop.TdReqHedgeCfmAction(Handle, pInputHedgeCfmAction, nRequestID);
+        }
+
+        /// <summary>
+        ///套保确认查询（6.7.13）
+        /// </summary>
+        public int ReqQryHedgeCfm(ThostFtdcQryHedgeCfmField pQryHedgeCfm, int nRequestID)
+        {
+            return Interop.TdReqQryHedgeCfm(Handle, pQryHedgeCfm, nRequestID);
         }
 
         /// <summary>

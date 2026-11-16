@@ -185,6 +185,12 @@ namespace Demo
 
         void TraderApi_OnRtnEvent(object sender, OnRtnEventArgs e)
         {
+            if (e.EventType == EnumOnRtnType.OnRtnPrivateSeqNo)
+            {
+                // pParam 存放的是整数序号，不是结构体指针
+                Console.WriteLine("=====> {0}: {1}", e.EventType, e.Param.ToInt32());
+                return;
+            }
             Console.WriteLine("=====> " + e.EventType);
         }
 

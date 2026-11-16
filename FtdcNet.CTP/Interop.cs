@@ -96,7 +96,7 @@ namespace CTP
 
 
         [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
-        public static extern IntPtr MdCreateApi(string pszFlowPath, bool bIsUsingUdp, bool bIsMulticast);
+        public static extern IntPtr MdCreateApi(string pszFlowPath, bool bIsUsingUdp, bool bIsMulticast, bool bIsProductionMode);
 
         [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
         public static extern IntPtr MdGetApiVersion();
@@ -143,7 +143,7 @@ namespace CTP
 
 
         [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
-        public static extern IntPtr TdCreateApi(string pszFlowPath);
+        public static extern IntPtr TdCreateApi(string pszFlowPath, bool bIsProductionMode);
 
         [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
         public static extern IntPtr TdGetApiVersion();
@@ -158,6 +158,9 @@ namespace CTP
         public static extern IntPtr TdGetTradingDay(IntPtr pApi);
 
         [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern void TdGetFrontInfo(IntPtr pApi, [In, Out] ThostFtdcFrontInfoField pFrontInfo);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
         public static extern void TdRegisterFront(IntPtr pApi, string pszFrontAddress);
 
         [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
@@ -167,7 +170,7 @@ namespace CTP
         public static extern void TdRegisterFensUserInfo(IntPtr pApi, ThostFtdcFensUserInfoField pFensUserInfo);
 
         [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
-        public static extern void TdSubscribePrivateTopic(IntPtr pApi, int nResumeType);
+        public static extern void TdSubscribePrivateTopic(IntPtr pApi, int nResumeType, int nSeqNo);
 
         [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
         public static extern void TdSubscribePublicTopic(IntPtr pApi, int nResumeType);
@@ -180,6 +183,12 @@ namespace CTP
 
         [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
         public static extern int TdSubmitUserSystemInfo(IntPtr pApi, ThostFtdcUserSystemInfoField pUserSystemInfo);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern int TdRegisterWechatUserSystemInfo(IntPtr pApi, ThostFtdcWechatUserSystemInfoField pUserSystemInfo);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern int TdSubmitWechatUserSystemInfo(IntPtr pApi, ThostFtdcWechatUserSystemInfoField pUserSystemInfo);
 
         [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
         public static extern int TdReqUserLogin(IntPtr pApi, ThostFtdcReqUserLoginField pReqUserLoginField, int nRequestID);
@@ -510,6 +519,48 @@ namespace CTP
 
         [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
         public static extern int TdReqQryInvestorProdRULEMargin(IntPtr pApi, ThostFtdcQryInvestorProdRULEMarginField pQryInvestorProdRULEMargin, int nRequestID);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern int TdReqQryUserSession(IntPtr pApi, ThostFtdcQryUserSessionField pQryUserSession, int nRequestID);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern int TdReqQryInvestorPortfSetting(IntPtr pApi, ThostFtdcQryInvestorPortfSettingField pQryInvestorPortfSetting, int nRequestID);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern int TdReqQryInvestorInfoCommRec(IntPtr pApi, ThostFtdcQryInvestorInfoCommRecField pQryInvestorInfoCommRec, int nRequestID);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern int TdReqQryCombLeg(IntPtr pApi, ThostFtdcQryCombLegField pQryCombLeg, int nRequestID);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern int TdReqOffsetSetting(IntPtr pApi, ThostFtdcInputOffsetSettingField pInputOffsetSetting, int nRequestID);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern int TdReqCancelOffsetSetting(IntPtr pApi, ThostFtdcInputOffsetSettingField pInputOffsetSetting, int nRequestID);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern int TdReqQryOffsetSetting(IntPtr pApi, ThostFtdcQryOffsetSettingField pQryOffsetSetting, int nRequestID);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern int TdReqGenSMSCode(IntPtr pApi, ThostFtdcReqGenSMSCodeField pReqGenSMSCode, int nRequestID);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern int TdReqSpdApply(IntPtr pApi, ThostFtdcInputSpdApplyField pInputSpdApply, int nRequestID);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern int TdReqSpdApplyAction(IntPtr pApi, ThostFtdcInputSpdApplyActionField pInputSpdApplyAction, int nRequestID);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern int TdReqQrySpdApply(IntPtr pApi, ThostFtdcQrySpdApplyField pQrySpdApply, int nRequestID);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern int TdReqHedgeCfm(IntPtr pApi, ThostFtdcInputHedgeCfmField pInputHedgeCfm, int nRequestID);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern int TdReqHedgeCfmAction(IntPtr pApi, ThostFtdcInputHedgeCfmActionField pInputHedgeCfmAction, int nRequestID);
+
+        [DllImport("ftdc2c_ctp", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern int TdReqQryHedgeCfm(IntPtr pApi, ThostFtdcQryHedgeCfmField pQryHedgeCfm, int nRequestID);
 
 
     }

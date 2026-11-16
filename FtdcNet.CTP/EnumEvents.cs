@@ -80,6 +80,30 @@ namespace CTP
         /// </summary>
         OnErrRtnQueryBankBalanceByFuture,
         /// <summary>
+        /// 对冲设置错误回报, ThostFtdcInputOffsetSettingField
+        /// </summary>
+        OnErrRtnOffsetSetting,
+        /// <summary>
+        /// 对冲设置撤销错误回报, ThostFtdcCancelOffsetSettingField
+        /// </summary>
+        OnErrRtnCancelOffsetSetting,
+        /// <summary>
+        /// 套利申请录入错误回报, ThostFtdcInputSpdApplyField
+        /// </summary>
+        OnErrRtnSpdApply,
+        /// <summary>
+        /// 套利确认撤销通知, ThostFtdcSpdApplyActionField
+        /// </summary>
+        OnErrRtnSpdApplyAction,
+        /// <summary>
+        /// 套保额度录入错误回报, ThostFtdcInputHedgeCfmField
+        /// </summary>
+        OnErrRtnHedgeCfm,
+        /// <summary>
+        /// 套保确认撤销通知, ThostFtdcHedgeCfmActionField
+        /// </summary>
+        OnErrRtnHedgeCfmAction,
+        /// <summary>
         /// 未使用,保留
         /// </summary>
         MaxValue,
@@ -271,6 +295,10 @@ namespace CTP
         ///请求查询合约手续费率响应, ThostFtdcInstrumentCommissionRateField
         /// </summary>
         OnRspQryInstrumentCommissionRate,
+        /// <summary>
+        /// 请求查询用户会话响应, ThostFtdcUserSessionField
+        /// </summary>
+        OnRspQryUserSession,
         /// <summary>
         ///请求查询交易所响应, ThostFtdcExchangeField
         /// </summary>
@@ -572,6 +600,58 @@ namespace CTP
         /// </summary>
         OnRspQryInvestorProdRULEMargin,
         /// <summary>
+        /// 投资者新型组合保证金开关查询响应, ThostFtdcInvestorPortfSettingField
+        /// </summary>
+        OnRspQryInvestorPortfSetting,
+        /// <summary>
+        /// 投资者申报费阶梯收取记录查询响应, ThostFtdcInvestorInfoCommRecField
+        /// </summary>
+        OnRspQryInvestorInfoCommRec,
+        /// <summary>
+        /// 组合腿信息查询响应, ThostFtdcCombLegField
+        /// </summary>
+        OnRspQryCombLeg,
+        /// <summary>
+        /// 对冲设置请求响应, ThostFtdcInputOffsetSettingField
+        /// </summary>
+        OnRspOffsetSetting,
+        /// <summary>
+        /// 对冲设置撤销请求响应, ThostFtdcInputOffsetSettingField
+        /// </summary>
+        OnRspCancelOffsetSetting,
+        /// <summary>
+        /// 投资者对冲设置查询响应, ThostFtdcOffsetSettingField
+        /// </summary>
+        OnRspQryOffsetSetting,
+        /// <summary>
+        /// 申请短信验证码响应, ThostFtdcRspGenSMSCodeField
+        /// </summary>
+        OnRspGenSMSCode,
+        /// <summary>
+        /// 套利确认回复, ThostFtdcInputSpdApplyField
+        /// </summary>
+        OnRspSpdApply,
+        /// <summary>
+        /// 套利确认撤销回复, ThostFtdcInputSpdApplyActionField
+        /// </summary>
+        OnRspSpdApplyAction,
+        /// <summary>
+        /// 套利确认查询回复, ThostFtdcSpdApplyField
+        /// </summary>
+        OnRspQrySpdApply,
+        /// <summary>
+        /// 套保确认回复, ThostFtdcInputHedgeCfmField
+        /// </summary>
+        OnRspHedgeCfm,
+        /// <summary>
+        /// 套保确认撤销回复, ThostFtdcInputHedgeCfmActionField
+        /// </summary>
+        OnRspHedgeCfmAction,
+        /// <summary>
+        /// 套保确认查询回复, ThostFtdcHedgeCfmField
+        /// </summary>
+        OnRspQryHedgeCfm,
+        /// <summary>
         /// 未使用,保留
         /// </summary>
         MaxValue,
@@ -590,6 +670,10 @@ namespace CTP
         ///询价通知, ThostFtdcForQuoteRspField
         /// </summary>
         OnRtnForQuoteRsp,
+        /// <summary>
+        /// 私有流序号通知, 整数; 使用 e.Param.ToInt32() 获取序号
+        /// </summary>
+        OnRtnPrivateSeqNo,
         /// <summary>
         ///报单通知, ThostFtdcOrderField
         /// </summary>
@@ -690,6 +774,18 @@ namespace CTP
         ///银行发起变更银行账号通知, ThostFtdcChangeAccountField
         /// </summary>
         OnRtnChangeAccountByBank,
+        /// <summary>
+        /// 对冲设置通知, ThostFtdcOffsetSettingField
+        /// </summary>
+        OnRtnOffsetSetting,
+        /// <summary>
+        /// 套利确认通知, ThostFtdcSpdApplyField
+        /// </summary>
+        OnRtnSpdApply,
+        /// <summary>
+        /// 套保确认通知, ThostFtdcHedgeCfmField
+        /// </summary>
+        OnRtnHedgeCfm,
         /// <summary>
         /// 未使用,保留
         /// </summary>
