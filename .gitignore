@@ -202,3 +202,16 @@ _Pvt_Extensions/
 .vs/
 .vscode/
 FtdcNet.CTP.xml
+
+# vendor CTP SDK packages kept locally (zips, demo, CHM)
+/api/
+
+# layout checker build artifacts
+/tools/layout-check/build/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# local Claude Code settings
+/.claude/
