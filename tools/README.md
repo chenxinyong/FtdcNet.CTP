@@ -21,6 +21,9 @@ CTP 头文件 → C# 生成/校验工具，避免下一次升级再手工导入�
 - `smoke/SmokeTest`：加载原生库、打印 MD/TD API 版本、创建/释放适配器（不登录）
 - `live-test/LiveTest`：SimNow/仿真环境联调（登录、订阅、查询、下单/撤单）；凭证只通过命令行参数传入，不写入仓库。
   加 `--resolve` 可用 `CzceInstrumentResolver` 把 4 位 CZCE 代码解析为前置实际代码（如 `SA2705 → SA705`）。
+- `soak-test/SoakTest`：夜盘/长稳测试，采集 tick 间隔、回调解析耗时、订单 RTT、查询延迟、
+  私有流序号缺口、内存/句柄/线程/CPU，输出 `resources.csv` 与 `summary.json`。
+- `soak-test/run-night.ps1`：等待到指定时间后启动 SoakTest，登录失败自动重试，适合夜盘定时跑。
 - `vendor/win-x64/WinDataCollect.dll`：CTP 6.7.13 x64 采集库，来自官方 6.7.13 API demo
 
 ## 常用命令
@@ -49,6 +52,14 @@ dotnet run --project tools/live-test/LiveTest -- \
   --broker 9999 --user <user> --password <password> \
   --md-front tcp://<md-host>:<port> --td-front tcp://<td-host>:<port> \
   --appid <appid> --authcode <authcode> --instrument cu2612 --place-order
+
+# 夜盘长稳：21:00 自动开始，跑 115 分钟，下单/查询循环
+powershell tools/soak-test/run-night.ps1 \
+  -User <user> -Password <password> -Broker 9999 \
+  -MdFront tcp://<md-host>:<port> -TdFront tcp://<td-host>:<port> \
+  -AppId <appid> -AuthCode <authcode> \
+  -Instruments cu2612,SA709,TA709,SA705 \
+  -DurationSec 6900 -QueryInterval 10 -OrderInterval 20 -PlaceOrder
 ```
 
 注意：郑商所（CZCE）老品种在 CTP/SimNow 中的 `InstrumentID` 是 3 位年月，例如

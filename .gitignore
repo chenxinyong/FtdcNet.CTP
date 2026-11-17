@@ -215,3 +215,6 @@ __pycache__/
 
 # local Claude Code settings
 /.claude/
+
+# soak/perf test artifacts
+tools/soak-test/results/
