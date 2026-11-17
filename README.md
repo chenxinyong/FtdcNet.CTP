@@ -72,7 +72,15 @@ string id = resolver.Resolve("SA2705");     // -> "SA705"
 string id2 = resolver.ResolveOnDemand("SA2709", () => ++requestId); // -> "SA709"
 ```
 
-注意：`LoadAll` / `ResolveOnDemand` 会阻塞等待 CTP 查询回调，不能在 CTP 回调线程或 UI 线程调用。
+落盘/分析侧如需统一 4 位代码，可使用：
+
+```csharp
+string code = CzceInstrumentCode.Normalize(
+    "CZCE", "SA709", DateTime.Today, "20270914"); // -> "SA2709"
+```
+
+注意：归一化只用于存储/展示，订阅、查询、下单必须继续使用前置返回的原始 `InstrumentID`。
+`LoadAll` / `ResolveOnDemand` 会阻塞等待 CTP 查询回调，不能在 CTP 回调线程或 UI 线程调用。
 合约是否存在以 `ReqQryInstrument` 结果为准，`SubscribeMarketData` 返回 0 不代表合约一定有效。
 
 ## ChangeLog

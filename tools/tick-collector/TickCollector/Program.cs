@@ -96,11 +96,16 @@ internal static class Program
 
         if (_aggTest)
         {
+            Console.WriteLine("normalize: " +
+                $"SA709->{CzceInstrumentCode.Normalize("CZCE", "SA709", DateTime.Today, "20270914")}, " +
+                $"SA705->{CzceInstrumentCode.Normalize("CZCE", "SA705", DateTime.Today, "20270514")}, " +
+                $"SO2707->{CzceInstrumentCode.Normalize("CZCE", "SO2707", DateTime.Today, "20270714")}, " +
+                $"cu2612->{CzceInstrumentCode.Normalize("SHFE", "cu2612", DateTime.Today, "20261214")}");
             OpenDatabase();
             var bars = new List<BarRow>();
             TickSnapshot MakeTick(string time, int ms, double price, int volume) => new TickSnapshot
             {
-                InstrumentID = "cu2612", ExchangeID = "SHFE",
+                InstrumentID = "cu2612", InstrumentID4 = "cu2612", ExchangeID = "SHFE",
                 TradingDay = "20261117", ActionDay = "20261117",
                 UpdateTime = time, UpdateMillisec = ms,
                 LastPrice = price, Volume = volume, Turnover = price * volume,
@@ -151,7 +156,7 @@ internal static class Program
             {
                 new TickSnapshot
                 {
-                    InstrumentID = "cu2612", ExchangeID = "SHFE",
+                    InstrumentID = "cu2612", InstrumentID4 = "cu2612", ExchangeID = "SHFE",
                     TradingDay = "20261117", ActionDay = "20261117",
                     UpdateTime = "21:00:00", UpdateMillisec = 500,
                     LastPrice = 70000, Volume = 100, Turnover = 7000000,
@@ -164,7 +169,8 @@ internal static class Program
             {
                 new BarRow
                 {
-                    InstrumentID = "cu2612", ExchangeID = "SHFE", TradingDay = "20261117",
+                    InstrumentID = "cu2612", InstrumentCtp = "cu2612",
+                    ExchangeID = "SHFE", TradingDay = "20261117",
                     BarTime = new DateTime(2026, 11, 17, 21, 0, 0),
                     Open = 70000, High = 70010, Low = 69990, Close = 70000,
                     Volume = 100, Turnover = 7000000, OpenInterest = 10000,
@@ -398,10 +404,16 @@ internal static class Program
         var t = Conv.P2S<ThostFtdcDepthMarketDataField>(e.Param);
         Interlocked.Increment(ref _ticksReceived);
 
+        var info = _contractInfo.TryGetValue(t.InstrumentID, out var ci) ? ci : null;
+        var instrument4 = info != null ? info.InstrumentID4 : t.InstrumentID;
+        var exchange = !string.IsNullOrEmpty(t.ExchangeID)
+            ? t.ExchangeID
+            : (info != null ? info.ExchangeID : "");
         var snap = new TickSnapshot
         {
             InstrumentID = t.InstrumentID,
-            ExchangeID = t.ExchangeID,
+            InstrumentID4 = instrument4,
+            ExchangeID = exchange,
             TradingDay = t.TradingDay,
             ActionDay = t.ActionDay,
             UpdateTime = t.UpdateTime,
@@ -572,6 +584,8 @@ internal static class Program
                 _contractInfo[f.InstrumentID] = new ContractInfo
                 {
                     InstrumentID = f.InstrumentID,
+                    InstrumentID4 = CzceInstrumentCode.Normalize(
+                        f.ExchangeID, f.InstrumentID, DateTime.Today, f.ExpireDate),
                     ExchangeID = f.ExchangeID,
                     IsTrading = f.IsTrading,
                     ExpireDate = f.ExpireDate,
@@ -588,6 +602,8 @@ internal static class Program
                     contracts = futures.Select(x => new
                     {
                         x.InstrumentID,
+                        InstrumentID4 = CzceInstrumentCode.Normalize(
+                            x.ExchangeID, x.InstrumentID, DateTime.Today, x.ExpireDate),
                         x.ExchangeID,
                         x.IsTrading,
                         x.ExpireDate,
@@ -710,10 +726,15 @@ internal static class Program
         var ts = ParseTimestamp(t.ActionDay, t.UpdateTime, t.UpdateMillisec);
         var minute = new DateTime(ts.Year, ts.Month, ts.Day, ts.Hour, ts.Minute, 0);
 
-        if (!_bars.TryGetValue(t.InstrumentID, out var state))
+        var instrument = string.IsNullOrEmpty(t.InstrumentID4) ? t.InstrumentID : t.InstrumentID4;
+        if (!_bars.TryGetValue(instrument, out var state))
         {
-            state = new BarState { InstrumentID = t.InstrumentID };
-            _bars[t.InstrumentID] = state;
+            state = new BarState
+            {
+                InstrumentID = instrument,
+                InstrumentCtp = t.InstrumentID,
+            };
+            _bars[instrument] = state;
         }
 
         if (state.HasTick && minute > state.Minute)
@@ -725,6 +746,7 @@ internal static class Program
         if (!state.HasTick)
         {
             state.Minute = minute;
+            state.InstrumentCtp = t.InstrumentID;
             state.ExchangeID = t.ExchangeID;
             state.TradingDay = t.TradingDay;
             state.ActionDay = t.ActionDay;
@@ -786,6 +808,7 @@ internal static class Program
         var bar = new BarRow
         {
             InstrumentID = state.InstrumentID,
+            InstrumentCtp = state.InstrumentCtp,
             ExchangeID = state.ExchangeID,
             TradingDay = state.TradingDay,
             BarTime = state.Minute,
@@ -855,6 +878,7 @@ internal static class Program
             cmd.CommandText = @"
 CREATE TABLE IF NOT EXISTS ticks (
     instrument VARCHAR,
+    instrument_ctp VARCHAR,
     exchange VARCHAR,
     trading_day VARCHAR,
     action_day VARCHAR,
@@ -872,6 +896,7 @@ CREATE TABLE IF NOT EXISTS ticks (
 );
 CREATE TABLE IF NOT EXISTS bars_1m (
     instrument VARCHAR NOT NULL,
+    instrument_ctp VARCHAR,
     exchange VARCHAR,
     trading_day VARCHAR,
     bar_time TIMESTAMP NOT NULL,
@@ -905,7 +930,8 @@ CREATE TABLE IF NOT EXISTS bars_1m (
                 foreach (var t in batch)
                 {
                     var row = appender.CreateRow();
-                    row.AppendValue(t.InstrumentID)
+                    row.AppendValue(string.IsNullOrEmpty(t.InstrumentID4) ? t.InstrumentID : t.InstrumentID4)
+                        .AppendValue(t.InstrumentID)
                         .AppendValue(t.ExchangeID)
                         .AppendValue(t.TradingDay)
                         .AppendValue(t.ActionDay)
@@ -955,6 +981,7 @@ CREATE TABLE IF NOT EXISTS bars_1m (
                     if (i > 0) sql.Append(',');
                     sql.Append('(')
                         .Append(Quote(b.InstrumentID)).Append(',')
+                        .Append(Quote(b.InstrumentCtp)).Append(',')
                         .Append(Quote(b.ExchangeID)).Append(',')
                         .Append(Quote(b.TradingDay)).Append(',')
                         .Append(Quote(b.BarTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture))).Append(',')
@@ -1087,6 +1114,7 @@ CREATE TABLE IF NOT EXISTS bars_1m (
     private sealed class BarState
     {
         public string InstrumentID;
+        public string InstrumentCtp;
         public string ExchangeID;
         public string TradingDay;
         public string ActionDay;
@@ -1105,6 +1133,7 @@ CREATE TABLE IF NOT EXISTS bars_1m (
     private sealed class BarRow
     {
         public string InstrumentID;
+        public string InstrumentCtp;
         public string ExchangeID;
         public string TradingDay;
         public DateTime BarTime;
@@ -1119,6 +1148,7 @@ CREATE TABLE IF NOT EXISTS bars_1m (
     private sealed class ContractInfo
     {
         public string InstrumentID;
+        public string InstrumentID4;
         public string ExchangeID;
         public int IsTrading;
         public string ExpireDate;
@@ -1127,6 +1157,7 @@ CREATE TABLE IF NOT EXISTS bars_1m (
     private struct TickSnapshot
     {
         public string InstrumentID;
+        public string InstrumentID4;
         public string ExchangeID;
         public string TradingDay;
         public string ActionDay;
