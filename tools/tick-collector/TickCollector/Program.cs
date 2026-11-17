@@ -57,6 +57,7 @@ internal static class Program
     private static long _subRequested;
     private static long _subAcked;
     private static long _subErrors;
+    private static int _subscribeGate;
     private static long _volumeResets;
     private static long _queueDepth;
 
@@ -234,8 +235,7 @@ internal static class Program
             return 1;
         }
 
-        var subscribeThread = new Thread(SubscribeAll) { IsBackground = true, Name = "subscribe" };
-        subscribeThread.Start();
+        StartSubscription("initial");
 
         _runWatch.Start();
         var lastPrint = Stopwatch.GetTimestamp();
@@ -380,6 +380,7 @@ internal static class Program
             }, NextReqId());
             return;
         }
+        _mdOk = false;
         Log($"[MD] disconnected reason={e.Reason}");
     });
 
@@ -390,6 +391,8 @@ internal static class Program
             Log($"[MD] login err={Err(e.RspInfo)}");
             _mdOk = IsOk(e.RspInfo);
             _mdReady.Set();
+            if (_mdOk)
+                StartSubscription("login");
             return;
         }
 
@@ -646,6 +649,24 @@ internal static class Program
         {
             _contractsReady.Set();
         }
+    }
+
+    private static void StartSubscription(string reason)
+    {
+        if (Interlocked.CompareExchange(ref _subscribeGate, 1, 0) != 0)
+            return;
+        new Thread(() =>
+        {
+            try
+            {
+                Log($"[MD] subscribe batch start ({reason})");
+                SubscribeAll();
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _subscribeGate, 0);
+            }
+        }) { IsBackground = true, Name = "subscribe" }.Start();
     }
 
     private static void SubscribeAll()
