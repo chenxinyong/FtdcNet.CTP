@@ -24,6 +24,9 @@ CTP 头文件 → C# 生成/校验工具，避免下一次升级再手工导入�
 - `soak-test/SoakTest`：夜盘/长稳测试，采集 tick 间隔、回调解析耗时、订单 RTT、查询延迟、
   私有流序号缺口、内存/句柄/线程/CPU，输出 `resources.csv` 与 `summary.json`。
 - `soak-test/run-night.ps1`：等待到指定时间后启动 SoakTest，登录失败自动重试，适合夜盘定时跑。
+- `tick-collector/TickCollector`：全期货合约 Tick 采集 + 1min K 线合成；Tick 写 DuckDB `ticks` 表，
+  K 线写 DuckDB `bars_1m` 表，合约清单写 `contracts.json`。
+- `tick-collector/run-night.ps1`：夜盘定时启动全市场采集，登录失败自动重试。
 - `vendor/win-x64/WinDataCollect.dll`：CTP 6.7.13 x64 采集库，来自官方 6.7.13 API demo
 
 ## 常用命令
@@ -60,6 +63,13 @@ powershell tools/soak-test/run-night.ps1 \
   -AppId <appid> -AuthCode <authcode> \
   -Instruments cu2612,SA709,TA709,SA705 \
   -DurationSec 6900 -QueryInterval 10 -OrderInterval 20 -PlaceOrder
+
+# 全期货 Tick + 1min 采集（21:00 自动开始，跑 2 小时）
+powershell tools/tick-collector/run-night.ps1 \
+  -User <user> -Password <password> -Broker 9999 \
+  -MdFront tcp://<md-host>:<port> -TdFront tcp://<td-host>:<port> \
+  -AppId <appid> -AuthCode <authcode> \
+  -DurationSec 7200 -Database data/bars_live.duckdb -Contracts data/contracts.json
 ```
 
 注意：郑商所（CZCE）老品种在 CTP/SimNow 中的 `InstrumentID` 是 3 位年月，例如

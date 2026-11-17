@@ -218,3 +218,9 @@ __pycache__/
 
 # soak/perf test artifacts
 tools/soak-test/results/
+
+# collected market data and local DuckDB files
+/data/
+tools/tick-collector/preflight/
+tools/tick-collector/*.duckdb*
+tools/tick-collector/*.summary.json
