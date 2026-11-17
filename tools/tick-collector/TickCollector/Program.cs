@@ -97,6 +97,8 @@ internal static class Program
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(_dbPath)) ?? ".");
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(_contractsPath)) ?? ".");
 
+        TryLoadContractsCache();
+
         if (_aggTest)
         {
             Console.WriteLine("normalize: " +
@@ -228,7 +230,7 @@ internal static class Program
         _md.Init();
         _td.Init();
 
-        if (!WaitBoth(TimeSpan.FromSeconds(90)))
+        if (!WaitBoth(TimeSpan.FromSeconds(180)))
         {
             Console.Error.WriteLine($"startup failed: mdOk={_mdOk}, contractsOk={_contractsOk}");
             Shutdown();
@@ -534,6 +536,11 @@ internal static class Program
                     _contractsReady.Set();
                     return;
                 }
+                if (_contracts.Length > 0)
+                {
+                    Log("[TD] contracts already loaded; skip re-query");
+                    break;
+                }
                 Log("[TD] settlement confirmed, querying contracts...");
                 new Thread(QueryAllContracts) { IsBackground = true, Name = "contracts" }.Start();
                 break;
@@ -545,6 +552,60 @@ internal static class Program
         Interlocked.Increment(ref _errors);
         Log($"[TD] {e.EventType} err={Err(e.RspInfo)}");
     });
+
+    private static void TryLoadContractsCache()
+    {
+        try
+        {
+            if (!File.Exists(_contractsPath))
+                return;
+
+            var cache = JsonSerializer.Deserialize<ContractsCache>(
+                File.ReadAllText(_contractsPath, Encoding.UTF8),
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (cache?.Contracts == null || cache.Contracts.Count == 0)
+                return;
+
+            if (DateTime.TryParse(cache.GeneratedAt, CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var generated) &&
+                (DateTime.Now - generated).TotalDays > 2)
+            {
+                Log($"[TD] contracts cache is stale ({cache.GeneratedAt}); querying TD");
+                return;
+            }
+
+            var list = cache.Contracts
+                .Where(x => !string.IsNullOrEmpty(x.InstrumentID))
+                .GroupBy(x => x.InstrumentID, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .OrderBy(x => x.InstrumentID, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            _contracts = list.Select(x => x.InstrumentID).ToArray();
+            foreach (var c in list)
+            {
+                var id4 = string.IsNullOrEmpty(c.InstrumentID4)
+                    ? CzceInstrumentCode.Normalize(c.ExchangeID, c.InstrumentID, DateTime.Today, c.ExpireDate)
+                    : c.InstrumentID4;
+                _contractInfo[c.InstrumentID] = new ContractInfo
+                {
+                    InstrumentID = c.InstrumentID,
+                    InstrumentID4 = id4,
+                    ExchangeID = c.ExchangeID,
+                    IsTrading = c.IsTrading,
+                    ExpireDate = c.ExpireDate,
+                };
+            }
+
+            _contractsOk = _contracts.Length > 0;
+            _contractsReady.Set();
+            Log($"[TD] loaded contracts cache: {_contracts.Length} (generated {cache.GeneratedAt})");
+        }
+        catch (Exception ex)
+        {
+            Log($"[TD] contracts cache load failed: {ex.Message}");
+        }
+    }
 
     private static void QueryAllContracts()
     {
@@ -1194,6 +1255,22 @@ CREATE TABLE IF NOT EXISTS bars_1m (
         public string ExchangeID;
         public int IsTrading;
         public string ExpireDate;
+    }
+
+    private sealed class ContractsCache
+    {
+        public string GeneratedAt { get; set; }
+        public int Count { get; set; }
+        public List<ContractCacheItem> Contracts { get; set; }
+    }
+
+    private sealed class ContractCacheItem
+    {
+        public string InstrumentID { get; set; }
+        public string InstrumentID4 { get; set; }
+        public string ExchangeID { get; set; }
+        public int IsTrading { get; set; }
+        public string ExpireDate { get; set; }
     }
 
     private struct TickSnapshot
