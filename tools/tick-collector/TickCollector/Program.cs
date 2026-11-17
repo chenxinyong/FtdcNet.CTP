@@ -26,6 +26,8 @@ internal static class Program
     private static int _flushMs = 1000;
     private static bool _dbTest;
     private static bool _aggTest;
+    private static DateTime? _minTime;
+    private static long _ticksSkipped;
 
     private static FtdcMdAdapter _md;
     private static FtdcTdAdapter _td;
@@ -319,6 +321,17 @@ internal static class Program
             _queueCapacity = qv;
         if (values.TryGetValue("flush-ms", out var f) && int.TryParse(f, out var fv) && fv > 0)
             _flushMs = fv;
+        if (values.TryGetValue("min-time", out var mt) && !string.IsNullOrWhiteSpace(mt))
+        {
+            if (DateTime.TryParseExact(mt, "HH:mm:ss", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var t))
+                _minTime = DateTime.Today.Add(t.TimeOfDay);
+            else if (DateTime.TryParse(mt, CultureInfo.InvariantCulture,
+                         DateTimeStyles.None, out var dt))
+                _minTime = dt;
+            else
+                throw new ArgumentException($"Invalid --min-time: {mt}");
+        }
     }
 
     private static string Require(Dictionary<string, string> values, string key)
@@ -402,6 +415,12 @@ internal static class Program
             return;
 
         var t = Conv.P2S<ThostFtdcDepthMarketDataField>(e.Param);
+        var tickTs = ParseTimestamp(t.ActionDay, t.UpdateTime, t.UpdateMillisec);
+        if (_minTime.HasValue && tickTs < _minTime.Value)
+        {
+            Interlocked.Increment(ref _ticksSkipped);
+            return;
+        }
         Interlocked.Increment(ref _ticksReceived);
 
         var info = _contractInfo.TryGetValue(t.InstrumentID, out var ci) ? ci : null;
@@ -1061,7 +1080,7 @@ CREATE TABLE IF NOT EXISTS bars_1m (
         Log($"progress {_runWatch.Elapsed.TotalMinutes:F1}m contracts={_contracts.Length} " +
             $"sub={_subAcked}/{_subRequested} ticks={_ticksReceived} written={_ticksWritten} " +
             $"bars={_barsWritten} queue={_queue.Reader.Count} dropped={_ticksDropped} " +
-            $"late={_lateTicks} err={_errors}");
+            $"skipped={_ticksSkipped} late={_lateTicks} err={_errors}");
     }
 
     private static void PrintSummary()
@@ -1072,7 +1091,8 @@ CREATE TABLE IF NOT EXISTS bars_1m (
         Console.WriteLine($"contracts: {_contracts.Length}");
         Console.WriteLine($"subscribe: requested={_subRequested} acked={_subAcked} errors={_subErrors}");
         Console.WriteLine($"ticks: received={_ticksReceived} written={_ticksWritten} " +
-                          $"dropped={_ticksDropped} late={_lateTicks} queue={_queue.Reader.Count}");
+                          $"dropped={_ticksDropped} skipped={_ticksSkipped} " +
+                          $"late={_lateTicks} queue={_queue.Reader.Count}");
         Console.WriteLine($"bars written: {_barsWritten}");
         Console.WriteLine($"volume resets: {_volumeResets}, errors: {_errors}");
         Console.WriteLine($"db: {Path.GetFullPath(_dbPath)}");
@@ -1094,6 +1114,7 @@ CREATE TABLE IF NOT EXISTS bars_1m (
                     received = _ticksReceived,
                     written = _ticksWritten,
                     dropped = _ticksDropped,
+                    skipped = _ticksSkipped,
                     late = _lateTicks,
                     volumeResets = _volumeResets,
                 },

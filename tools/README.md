@@ -71,7 +71,8 @@ powershell tools/tick-collector/run-night.ps1 \
   -User <user> -Password <password> -Broker 9999 \
   -MdFront tcp://<md-host>:<port> -TdFront tcp://<td-host>:<port> \
   -AppId <appid> -AuthCode <authcode> \
-  -DurationSec 7200 -Database data/bars_live.duckdb -Contracts data/contracts.json
+  -DurationSec 7800 -Database data/bars_live.duckdb -Contracts data/contracts.json \
+  -MinTime "21:00:00"
 ```
 
 注意：郑商所（CZCE）老品种在 CTP/SimNow 中的 `InstrumentID` 是 3 位年月，例如

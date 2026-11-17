@@ -10,7 +10,8 @@ param(
     [string]$StartAt = "21:00",
     [int]$Retries = 30,
     [string]$Database = "data/bars_live.duckdb",
-    [string]$Contracts = "data/contracts.json"
+    [string]$Contracts = "data/contracts.json",
+    [string]$MinTime = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,6 +41,7 @@ for ($i = 1; $i -le $Retries; $i++) {
     )
     if ($AppId) { $runArgs += @("--appid", $AppId) }
     if ($AuthCode) { $runArgs += @("--authcode", $AuthCode) }
+    if ($MinTime) { $runArgs += @("--min-time", $MinTime) }
 
     Write-Host ("attempt {0} at {1:HH:mm:ss}, db={2}" -f $i, (Get-Date), $Database)
     & dotnet @runArgs
