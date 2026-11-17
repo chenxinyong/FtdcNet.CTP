@@ -146,7 +146,7 @@ internal static class Program
                                   $"O={open} H={high} L={low} C={close} V={volume} N={ticks}");
                 if (rows == 1 && (open != 100 || high != 105 || low != 100 || close != 105 || volume != 5))
                     ok = false;
-                if (rows == 2 && (open != 103 || high != 103 || low != 101 || close != 101 || volume != 8))
+                if (rows == 2 && (open != 103 || high != 103 || low != 101 || close != 101 || volume != 15))
                     ok = false;
             }
             Console.WriteLine($"agg-test: {(ok && rows == 2 ? "OK" : "FAIL")}, rows={rows}");
@@ -838,6 +838,15 @@ internal static class Program
             _bars[instrument] = state;
         }
 
+        if (!state.HasTick && state.Previous != null && state.Previous.BarTime == minute)
+        {
+            // A late tick arrived after the previous minute was finalized.
+            // Update the previous bar instead of starting a second bar for
+            // the same minute.
+            UpdatePreviousBar(state, t, minute, barBatch);
+            return;
+        }
+
         if (state.HasTick && minute > state.Minute)
         {
             FinalizeBar(state, barBatch);
@@ -846,6 +855,8 @@ internal static class Program
 
         if (!state.HasTick)
         {
+            var carryVolume = state.Previous != null ? state.LastCumVolume : t.Volume;
+            var carryTurnover = state.Previous != null ? state.LastCumTurnover : t.Turnover;
             state.Minute = minute;
             state.InstrumentCtp = t.InstrumentID;
             state.ExchangeID = t.ExchangeID;
@@ -858,23 +869,19 @@ internal static class Program
             state.Volume = 0;
             state.Turnover = 0;
             state.TickCount = 0;
-            state.LastCumVolume = t.Volume;
-            state.LastCumTurnover = t.Turnover;
+            state.LastCumVolume = carryVolume;
+            state.LastCumTurnover = carryTurnover;
             state.HasTick = true;
         }
         else if (minute < state.Minute)
         {
-            Interlocked.Increment(ref _lateTicks);
-            // Late tick for the just-finalized minute: update OHLC and re-emit.
             if (state.Previous != null && state.Previous.BarTime == minute)
             {
-                var prev = state.Previous;
-                prev.High = Math.Max(prev.High, t.LastPrice);
-                prev.Low = Math.Min(prev.Low, t.LastPrice);
-                prev.Close = t.LastPrice;
-                prev.OpenInterest = t.OpenInterest;
-                prev.TickCount++;
-                barBatch.Add(prev);
+                UpdatePreviousBar(state, t, minute, barBatch);
+            }
+            else
+            {
+                Interlocked.Increment(ref _lateTicks);
             }
             return;
         }
@@ -901,6 +908,29 @@ internal static class Program
         state.LastCumTurnover = t.Turnover;
     }
 
+    private static void UpdatePreviousBar(
+        BarState state,
+        TickSnapshot t,
+        DateTime minute,
+        List<BarRow> barBatch)
+    {
+        Interlocked.Increment(ref _lateTicks);
+        var prev = state.Previous;
+        if (prev == null || prev.BarTime != minute)
+            return;
+
+        // Late ticks only correct OHLC/OI/tick count. Their cumulative
+        // volume may already be included in later ticks, so adding a volume
+        // delta here would double count; the raw ticks table is used to
+        // rebuild exact bar volume after the session.
+        prev.High = Math.Max(prev.High, t.LastPrice);
+        prev.Low = Math.Min(prev.Low, t.LastPrice);
+        prev.Close = t.LastPrice;
+        prev.OpenInterest = t.OpenInterest;
+        prev.TickCount++;
+        barBatch.Add(prev);
+    }
+
     private static void FinalizeBar(BarState state, List<BarRow> barBatch)
     {
         if (!state.HasTick || state.TickCount <= 0)
@@ -921,6 +951,8 @@ internal static class Program
             Turnover = state.Turnover,
             OpenInterest = state.OpenInterest,
             TickCount = state.TickCount,
+            CumVolume = state.LastCumVolume,
+            CumTurnover = state.LastCumTurnover,
             UpdatedAt = DateTime.Now,
         };
         barBatch.Add(bar);
@@ -930,13 +962,11 @@ internal static class Program
 
     private static void FlushStaleBars(List<BarRow> barBatch)
     {
-        var nowMinute = DateTime.Now;
-        nowMinute = new DateTime(nowMinute.Year, nowMinute.Month, nowMinute.Day,
-            nowMinute.Hour, nowMinute.Minute, 0);
-
+        var now = DateTime.Now;
         foreach (var state in _bars.Values)
         {
-            if (state.HasTick && state.Minute < nowMinute)
+            // Give late ticks a few seconds of grace after the minute ends.
+            if (state.HasTick && state.Minute.AddMinutes(1).AddSeconds(3) <= now)
             {
                 FinalizeBar(state, barBatch);
             }
@@ -1245,6 +1275,8 @@ CREATE TABLE IF NOT EXISTS bars_1m (
         public double Turnover;
         public double OpenInterest;
         public int TickCount;
+        public long CumVolume;
+        public double CumTurnover;
         public DateTime UpdatedAt;
     }
 
