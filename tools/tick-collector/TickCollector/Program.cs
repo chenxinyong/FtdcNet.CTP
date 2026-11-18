@@ -236,9 +236,6 @@ internal static class Program
             return 1;
         }
 
-        foreach (var shard in _shards)
-            StartSubscription(shard, "initial");
-
         _runWatch.Start();
         var lastPrint = Stopwatch.GetTimestamp();
         while (!_stopping && _runWatch.Elapsed.TotalSeconds < _durationSec)
