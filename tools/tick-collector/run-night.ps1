@@ -11,7 +11,8 @@ param(
     [int]$Retries = 30,
     [string]$Database = "data/bars_live.duckdb",
     [string]$Contracts = "data/contracts.json",
-    [string]$MinTime = ""
+    [string]$MinTime = "",
+    [int]$MdShards = 1
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,7 +38,8 @@ for ($i = 1; $i -le $Retries; $i++) {
         "--td-front", $TdFront,
         "--db", $Database,
         "--contracts", $Contracts,
-        "--duration", $DurationSec
+        "--duration", $DurationSec,
+        "--md-shards", $MdShards
     )
     if ($AppId) { $runArgs += @("--appid", $AppId) }
     if ($AuthCode) { $runArgs += @("--authcode", $AuthCode) }

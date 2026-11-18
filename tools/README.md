@@ -27,7 +27,8 @@ CTP 头文件 → C# 生成/校验工具，避免下一次升级再手工导入�
 - `tick-collector/TickCollector`：全期货合约 Tick 采集 + 1min K 线合成；Tick 写 DuckDB `ticks` 表，
   K 线写 DuckDB `bars_1m` 表，合约清单写 `contracts.json`。
   落盘时 CZCE 3 位合约统一为 4 位（`SA709 → SA2709`）；`instrument_ctp` 列保留前置原始代码，
-  订阅/下单仍使用原始代码。
+  订阅/下单仍使用原始代码。`--md-shards N` 可把合约拆分到多个 MD 连接，
+  默认 1（单 MD）；每个分片独立登录/重连/重订阅。
 - `tick-collector/run-night.ps1`：夜盘定时启动全市场采集，登录失败自动重试。
 - `tick-collector/rebuild_bars.py`：收盘后从 `ticks` 原始表重算 `bars_1m`，
   修正迟到 Tick 导致的分钟边界覆盖，并做成交量对账。
@@ -74,7 +75,7 @@ powershell tools/tick-collector/run-night.ps1 \
   -MdFront tcp://<md-host>:<port> -TdFront tcp://<td-host>:<port> \
   -AppId <appid> -AuthCode <authcode> \
   -DurationSec 7800 -Database data/bars_live.duckdb -Contracts data/contracts.json \
-  -MinTime "21:00:00"
+  -MinTime "21:00:00" -MdShards 3
 
 # 收盘后从原始 Tick 重算 1min Bar（建议每次采集后执行）
 python tools/tick-collector/rebuild_bars.py --db data/bars_live.duckdb

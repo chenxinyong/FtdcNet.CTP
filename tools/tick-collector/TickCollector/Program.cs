@@ -29,13 +29,12 @@ internal static class Program
     private static DateTime? _minTime;
     private static long _ticksSkipped;
 
-    private static FtdcMdAdapter _md;
+    private static int _mdShards = 1;
+    private static readonly List<MdShard> _shards = new();
     private static FtdcTdAdapter _td;
     private static int _reqId;
 
-    private static readonly ManualResetEventSlim _mdReady = new(false);
     private static readonly ManualResetEventSlim _contractsReady = new(false);
-    private static volatile bool _mdOk;
     private static volatile bool _contractsOk;
     private static volatile bool _stopping;
 
@@ -57,7 +56,6 @@ internal static class Program
     private static long _subRequested;
     private static long _subAcked;
     private static long _subErrors;
-    private static int _subscribeGate;
     private static long _volumeResets;
     private static long _queueDepth;
 
@@ -89,7 +87,8 @@ internal static class Program
             Console.Error.WriteLine("Usage: TickCollector --broker 9999 --user U --password P " +
                                     "--md-front tcp://ip:port --td-front tcp://ip:port " +
                                     "[--appid X --authcode Y] [--db data/bars_live.duckdb] " +
-                                    "[--duration 7200] [--subscribe-batch 200] " +
+                                    "[--duration 7200] [--md-shards 1] " +
+                                    "[--subscribe-batch 200] " +
                                     "[--parquet data/ticks.parquet]");
             return 2;
         }
@@ -195,8 +194,9 @@ internal static class Program
         Console.WriteLine($"{_startedAt:yyyy-MM-dd HH:mm:ss} tick collector start");
         Console.WriteLine($"  db={Path.GetFullPath(_dbPath)}");
         Console.WriteLine($"  contracts={Path.GetFullPath(_contractsPath)}");
-        Console.WriteLine($"  duration={_durationSec}s, batch={_subscribeBatch}, " +
-                          $"interval={_subscribeIntervalMs}ms, queue={_queueCapacity}");
+        Console.WriteLine($"  duration={_durationSec}s, shards={_mdShards}, " +
+                          $"batch={_subscribeBatch}, interval={_subscribeIntervalMs}ms, " +
+                          $"queue={_queueCapacity}");
 
         _queue = Channel.CreateBounded<TickSnapshot>(new BoundedChannelOptions(_queueCapacity)
         {
@@ -208,15 +208,9 @@ internal static class Program
         _consumer = new Thread(ConsumeLoop) { IsBackground = true, Name = "tick-consumer" };
         _consumer.Start();
 
-        var mdFlow = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_dbPath)) ?? ".", "flow-md");
-        var tdFlow = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_dbPath)) ?? ".", "flow-td");
-        Directory.CreateDirectory(mdFlow);
+        var dataDir = Path.GetDirectoryName(Path.GetFullPath(_dbPath)) ?? ".";
+        var tdFlow = Path.Combine(dataDir, "flow-td");
         Directory.CreateDirectory(tdFlow);
-
-        _md = new FtdcMdAdapter(mdFlow, false, false);
-        _md.OnFrontEvent += MdOnFront;
-        _md.OnRspEvent += MdOnRsp;
-        _md.OnRtnEvent += MdOnRtn;
 
         _td = new FtdcTdAdapter(tdFlow);
         _td.OnFrontEvent += TdOnFront;
@@ -224,20 +218,26 @@ internal static class Program
         _td.OnErrRtnEvent += TdOnErrRtn;
         _td.SubscribePrivateTopic(EnumTeResumeType.THOST_TERT_QUICK);
         _td.SubscribePublicTopic(EnumTeResumeType.THOST_TERT_QUICK);
-
-        _md.RegisterFront(_mdFront);
         _td.RegisterFront(_tdFront);
-        _md.Init();
         _td.Init();
 
-        if (!WaitBoth(TimeSpan.FromSeconds(180)))
+        if (!_contractsReady.Wait(TimeSpan.FromSeconds(180)) || !_contractsOk)
         {
-            Console.Error.WriteLine($"startup failed: mdOk={_mdOk}, contractsOk={_contractsOk}");
+            Console.Error.WriteLine($"contracts unavailable: contractsOk={_contractsOk}");
             Shutdown();
             return 1;
         }
 
-        StartSubscription("initial");
+        CreateMdShards(dataDir);
+        if (!WaitShards(TimeSpan.FromSeconds(180)))
+        {
+            Console.Error.WriteLine("startup failed: one or more MD shards did not log in");
+            Shutdown();
+            return 1;
+        }
+
+        foreach (var shard in _shards)
+            StartSubscription(shard, "initial");
 
         _runWatch.Start();
         var lastPrint = Stopwatch.GetTimestamp();
@@ -260,16 +260,42 @@ internal static class Program
         return 0;
     }
 
-    private static bool WaitBoth(TimeSpan timeout)
+    private static void CreateMdShards(string dataDir)
+    {
+        var count = Math.Max(1, Math.Min(8, _mdShards));
+        for (var i = 0; i < count; i++)
+        {
+            var flow = Path.Combine(dataDir, $"flow-md-{i}");
+            Directory.CreateDirectory(flow);
+            var shard = new MdShard
+            {
+                Index = i,
+                FlowPath = flow,
+                Contracts = _contracts.Where((_, index) => index % count == i).ToArray(),
+                Adapter = new FtdcMdAdapter(flow, false, false),
+            };
+            var s = shard;
+            shard.Adapter.OnFrontEvent += (_, e) => MdOnFront(s, e);
+            shard.Adapter.OnRspEvent += (_, e) => MdOnRsp(s, e);
+            shard.Adapter.OnRtnEvent += (_, e) => MdOnRtn(s, e);
+            shard.Adapter.RegisterFront(_mdFront);
+            shard.Adapter.Init();
+            _shards.Add(shard);
+        }
+        Log($"MD shards: {count}, " +
+            string.Join(", ", _shards.Select(s => $"{s.Name}={s.Contracts.Length}")));
+    }
+
+    private static bool WaitShards(TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            if (_mdReady.IsSet && _contractsReady.IsSet)
-                return _mdOk && _contractsOk;
+            if (_shards.Count > 0 && _shards.All(s => s.Ready.IsSet))
+                return _shards.All(s => s.Ok);
             Thread.Sleep(100);
         }
-        return _mdOk && _contractsOk && _mdReady.IsSet && _contractsReady.IsSet;
+        return _shards.Count > 0 && _shards.All(s => s.Ok && s.Ready.IsSet);
     }
 
     private static void ParseArgs(string[] args)
@@ -323,6 +349,8 @@ internal static class Program
             _queueCapacity = qv;
         if (values.TryGetValue("flush-ms", out var f) && int.TryParse(f, out var fv) && fv > 0)
             _flushMs = fv;
+        if (values.TryGetValue("md-shards", out var ms) && int.TryParse(ms, out var msv) && msv > 0)
+            _mdShards = Math.Min(msv, 8);
         if (values.TryGetValue("min-time", out var mt) && !string.IsNullOrWhiteSpace(mt))
         {
             if (DateTime.TryParseExact(mt, "HH:mm:ss", CultureInfo.InvariantCulture,
@@ -369,12 +397,13 @@ internal static class Program
 
     // ------------------------------------------------------------------ MD
 
-    private static void MdOnFront(object sender, OnFrontEventArgs e) => Safe("MD", () =>
+    private static void MdOnFront(MdShard shard, OnFrontEventArgs e) => Safe(shard.Name, () =>
     {
         if (e.EventType == EnumOnFrontType.OnFrontConnected)
         {
-            Log("[MD] connected");
-            _md.ReqUserLogin(new ThostFtdcReqUserLoginField
+            Interlocked.Increment(ref shard.Connects);
+            Log($"[{shard.Name}] connected");
+            shard.Adapter.ReqUserLogin(new ThostFtdcReqUserLoginField
             {
                 BrokerID = _broker,
                 UserID = _user,
@@ -382,19 +411,20 @@ internal static class Program
             }, NextReqId());
             return;
         }
-        _mdOk = false;
-        Log($"[MD] disconnected reason={e.Reason}");
+        shard.Ok = false;
+        Interlocked.Increment(ref shard.Disconnects);
+        Log($"[{shard.Name}] disconnected reason={e.Reason}");
     });
 
-    private static void MdOnRsp(object sender, OnRspEventArgs e) => Safe("MD", () =>
+    private static void MdOnRsp(MdShard shard, OnRspEventArgs e) => Safe(shard.Name, () =>
     {
         if (e.EventType == EnumOnRspType.OnRspUserLogin)
         {
-            Log($"[MD] login err={Err(e.RspInfo)}");
-            _mdOk = IsOk(e.RspInfo);
-            _mdReady.Set();
-            if (_mdOk)
-                StartSubscription("login");
+            Log($"[{shard.Name}] login err={Err(e.RspInfo)}");
+            shard.Ok = IsOk(e.RspInfo);
+            shard.Ready.Set();
+            if (shard.Ok)
+                StartSubscription(shard, "login");
             return;
         }
 
@@ -402,23 +432,26 @@ internal static class Program
         {
             if (!IsOk(e.RspInfo))
             {
+                Interlocked.Increment(ref shard.SubErrors);
                 Interlocked.Increment(ref _subErrors);
                 if (e.Param != IntPtr.Zero)
                 {
                     var f = Conv.P2S<ThostFtdcSpecificInstrumentField>(e.Param);
-                    Log($"[MD] subscribe failed {f.InstrumentID}: {Err(e.RspInfo)}");
+                    Log($"[{shard.Name}] subscribe failed {f.InstrumentID}: {Err(e.RspInfo)}");
                 }
                 return;
             }
+            Interlocked.Increment(ref shard.SubAcked);
             Interlocked.Increment(ref _subAcked);
         }
     });
 
-    private static void MdOnRtn(object sender, OnRtnEventArgs e) => Safe("MD", () =>
+    private static void MdOnRtn(MdShard shard, OnRtnEventArgs e) => Safe(shard.Name, () =>
     {
         if (e.EventType != EnumOnRtnType.OnRtnDepthMarketData || e.Param == IntPtr.Zero)
             return;
 
+        Volatile.Write(ref shard.LastTickTs, Stopwatch.GetTimestamp());
         var t = Conv.P2S<ThostFtdcDepthMarketDataField>(e.Param);
         var tickTs = ParseTimestamp(t.ActionDay, t.UpdateTime, t.UpdateMillisec);
         if (_minTime.HasValue && tickTs < _minTime.Value)
@@ -712,56 +745,59 @@ internal static class Program
         }
     }
 
-    private static void StartSubscription(string reason)
+    private static void StartSubscription(MdShard shard, string reason)
     {
-        if (Interlocked.CompareExchange(ref _subscribeGate, 1, 0) != 0)
+        if (Interlocked.CompareExchange(ref shard.SubscribeGate, 1, 0) != 0)
             return;
         new Thread(() =>
         {
             try
             {
-                Log($"[MD] subscribe batch start ({reason})");
-                SubscribeAll();
+                Log($"[{shard.Name}] subscribe batch start ({reason})");
+                SubscribeShard(shard);
             }
             finally
             {
-                Interlocked.Exchange(ref _subscribeGate, 0);
+                Interlocked.Exchange(ref shard.SubscribeGate, 0);
             }
-        }) { IsBackground = true, Name = "subscribe" }.Start();
+        }) { IsBackground = true, Name = $"subscribe-{shard.Index}" }.Start();
     }
 
-    private static void SubscribeAll()
+    private static void SubscribeShard(MdShard shard)
     {
         try
         {
             if (!_contractsReady.Wait(TimeSpan.FromSeconds(60)) ||
-                !_mdReady.Wait(TimeSpan.FromSeconds(60)))
+                !shard.Ready.Wait(TimeSpan.FromSeconds(60)))
                 return;
 
-            for (var offset = 0; offset < _contracts.Length; offset += _subscribeBatch)
+            for (var offset = 0; offset < shard.Contracts.Length; offset += _subscribeBatch)
             {
                 if (_stopping)
                     return;
-                var batch = _contracts.Skip(offset).Take(_subscribeBatch).ToArray();
-                var ret = _md.SubscribeMarketData(batch);
+                var batch = shard.Contracts.Skip(offset).Take(_subscribeBatch).ToArray();
+                var ret = shard.Adapter.SubscribeMarketData(batch);
+                Interlocked.Add(ref shard.SubRequested, batch.Length);
                 Interlocked.Add(ref _subRequested, batch.Length);
                 if (ret != 0)
                 {
+                    Interlocked.Increment(ref shard.SubErrors);
                     Interlocked.Increment(ref _subErrors);
-                    Log($"[MD] SubscribeMarketData batch at {offset} returned {ret}");
+                    Log($"[{shard.Name}] SubscribeMarketData batch at {offset} returned {ret}");
                 }
                 if (offset % (_subscribeBatch * 10) == 0)
-                    Log($"[MD] subscribe progress {Math.Min(offset + batch.Length, _contracts.Length)}/{_contracts.Length}");
+                    Log($"[{shard.Name}] subscribe progress " +
+                        $"{Math.Min(offset + batch.Length, shard.Contracts.Length)}/{shard.Contracts.Length}");
                 if (_subscribeIntervalMs > 0)
                     Thread.Sleep(_subscribeIntervalMs);
             }
-            Log($"[MD] subscribe requests done: {_subRequested} requested, " +
-                $"{_subAcked} acked, {_subErrors} errors");
+            Log($"[{shard.Name}] subscribe requests done: " +
+                $"{shard.SubRequested} requested, {shard.SubAcked} acked, {shard.SubErrors} errors");
         }
         catch (Exception ex)
         {
             Interlocked.Increment(ref _errors);
-            Log($"[MD] subscribe failed: {ex.Message}");
+            Log($"[{shard.Name}] subscribe failed: {ex.Message}");
         }
     }
 
@@ -1183,7 +1219,10 @@ CREATE TABLE IF NOT EXISTS bars_1m (
             _dbReady = false;
         }
 
-        try { _md?.Dispose(); } catch { }
+        foreach (var shard in _shards)
+        {
+            try { shard.Adapter?.Dispose(); } catch { }
+        }
         try { _td?.Dispose(); } catch { }
     }
 
@@ -1202,6 +1241,10 @@ CREATE TABLE IF NOT EXISTS bars_1m (
         Console.WriteLine($"duration: {_runWatch.Elapsed.TotalMinutes:F2} min");
         Console.WriteLine($"contracts: {_contracts.Length}");
         Console.WriteLine($"subscribe: requested={_subRequested} acked={_subAcked} errors={_subErrors}");
+        foreach (var shard in _shards)
+            Console.WriteLine($"  {shard.Name}: contracts={shard.Contracts.Length} " +
+                              $"connects={shard.Connects} disconnects={shard.Disconnects} " +
+                              $"sub={shard.SubAcked}/{shard.SubRequested} errors={shard.SubErrors}");
         Console.WriteLine($"ticks: received={_ticksReceived} written={_ticksWritten} " +
                           $"dropped={_ticksDropped} skipped={_ticksSkipped} " +
                           $"late={_lateTicks} queue={_queue.Reader.Count}");
@@ -1220,6 +1263,16 @@ CREATE TABLE IF NOT EXISTS bars_1m (
                 endedAt = _endedAt.ToString("yyyy-MM-dd HH:mm:ss"),
                 durationSec = _runWatch.Elapsed.TotalSeconds,
                 contracts = _contracts.Length,
+                shards = _shards.Select(s => new
+                {
+                    name = s.Name,
+                    contracts = s.Contracts.Length,
+                    connects = s.Connects,
+                    disconnects = s.Disconnects,
+                    subscribeRequested = s.SubRequested,
+                    subscribeAcked = s.SubAcked,
+                    subscribeErrors = s.SubErrors,
+                }).ToArray(),
                 subscribe = new { requested = _subRequested, acked = _subAcked, errors = _subErrors },
                 ticks = new
                 {
@@ -1278,6 +1331,24 @@ CREATE TABLE IF NOT EXISTS bars_1m (
         public long CumVolume;
         public double CumTurnover;
         public DateTime UpdatedAt;
+    }
+
+    private sealed class MdShard
+    {
+        public int Index;
+        public FtdcMdAdapter Adapter;
+        public string[] Contracts;
+        public string FlowPath;
+        public readonly ManualResetEventSlim Ready = new(false);
+        public volatile bool Ok;
+        public int SubscribeGate;
+        public long SubRequested;
+        public long SubAcked;
+        public long SubErrors;
+        public long Connects;
+        public long Disconnects;
+        public long LastTickTs;
+        public string Name => $"MD#{Index}";
     }
 
     private sealed class ContractInfo
