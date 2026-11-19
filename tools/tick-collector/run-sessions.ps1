@@ -5,6 +5,12 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$mutex = New-Object System.Threading.Mutex($false, "Local\FtdcNet.CTP.SessionScheduler")
+if (-not $mutex.WaitOne(0)) {
+    Write-Host "another session scheduler is already running"
+    exit 0
+}
+
 $repo = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Set-Location $repo
 
