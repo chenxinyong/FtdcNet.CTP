@@ -1,5 +1,6 @@
 param(
     [string]$Config = "$env:LOCALAPPDATA\FtdcNet.CTP\collector.json",
+    [int]$MaxLatenessMinutes = 15,
     [switch]$Once,
     [switch]$DryRun
 )
@@ -56,13 +57,11 @@ function Invoke-Session {
     $now = Get-Date
     if ($Kind -eq "day") {
         $db = Join-Path "data" ("bars_day_" + $now.ToString("yyyyMMdd") + ".duckdb")
-        $startAt = $cfg.dayStart
         $minTime = $cfg.dayMinTime
         $duration = [int]$cfg.dayDurationSec
     }
     else {
         $db = Join-Path "data" ("bars_night_" + $now.ToString("yyyyMMdd") + ".duckdb")
-        $startAt = $cfg.nightStart
         $minTime = $cfg.nightMinTime
         $duration = [int]$cfg.nightDurationSec
     }
@@ -107,6 +106,13 @@ while ($true) {
 
     while ((Get-Date) -lt $next.Time) {
         Start-Sleep -Seconds 30
+    }
+
+    $lateness = (Get-Date) - $next.Time
+    if ($lateness.TotalMinutes -gt $MaxLatenessMinutes) {
+        Write-Host ("[{0:yyyy-MM-dd HH:mm:ss}] missed {1} session by {2:F1} min; skipping" -f
+            (Get-Date), $next.Kind, $lateness.TotalMinutes)
+        continue
     }
 
     $code = Invoke-Session -Kind $next.Kind
