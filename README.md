@@ -45,7 +45,62 @@ NetCore及Net5之后项目，使用NuGet Manager添加Package之后，会自动�
   powershell tools/build.ps1 -Configuration Release
   详见 tools/README.md。
 
+## 本地 NuGet 包（Local feed）
 
+内部系统可引用本机构建的包，不走 nuget.org。默认投递到 `C:\Works\LocalNuGet`：
+
+```powershell
+# 完整重建（原生 x64/x86 + ABI/结构体布局校验 + managed 构建 + 打包）并投递到本地源
+powershell tools/pack-local.ps1
+
+# 复用已有 nupkg（要求它比库源码和 Release\runtimes 下的原生 DLL 新，否则脚本拒绝）
+powershell tools/pack-local.ps1 -SkipBuild
+
+# 自定义输出目录；-Force 跳过“包比源码旧”检查
+powershell tools/pack-local.ps1 -OutputDir D:\NuGetFeed -Force
+```
+
+脚本固定使用 Release（csproj 把原生库路径写死为 `..\Release\runtimes`，Debug 包不含原生库），
+并会打开 nupkg 校验两个 TFM 的 dll/xml 及 7 个原生 DLL（x64 4 个、x86 3 个），缺失即失败。
+
+首次使用注册本地源（一次即可）：
+
+```powershell
+dotnet nuget add source C:\Works\LocalNuGet -n FtdcNetLocal
+```
+
+消费项目建议在仓库根目录放 `nuget.config`，用 `packageSourceMapping` 把 `FtdcNet.CTP*` 固定到本地源
+（nuget.org 上同样存在 1.5.0，不固定可能还原到官方包）：
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="FtdcNetLocal" value="C:\Works\LocalNuGet" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+  </packageSources>
+  <packageSourceMapping>
+    <packageSource key="FtdcNetLocal">
+      <package pattern="FtdcNet.CTP*" />
+    </packageSource>
+    <packageSource key="nuget.org">
+      <package pattern="*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>
+```
+
+```powershell
+dotnet add package FtdcNet.CTP --version 1.5.0
+```
+
+注意：
+- NuGet 按“包 ID + 版本”缓存。如果本机之前从 nuget.org 还原过 1.5.0，本地源的同版本包不会覆盖缓存；
+  先删除 `%USERPROFILE%\.nuget\packages\ftdcnet.ctp\1.5.0`，再 `dotnet restore --force`。
+- 其他机器：复制整个 `C:\Works\LocalNuGet` 目录（或单个 `.nupkg`），在对方机器按实际路径注册本地源。
+- `.snupkg` 一并投递仅用于归档；文件夹源不提供符号下载。
+- .NET Framework 项目见下方“Net Framework Project”，AnyCPU 仍需手动拷贝 `runtimes` 目录。
 
 ## Net Framework Project
 * Net Framework项目，如果platform是AnyCPU或者是VS2013项目，需要手动拷贝runtimes目录到可执行文件的输出目录，  

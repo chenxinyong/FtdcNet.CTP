@@ -59,6 +59,9 @@ dotnet run --project tools/smoke/SmokeTest -p:PlatformTarget=x86
 # 一键：原生 x64/x86 + 校验 + managed 构建 + NuGet 打包
 powershell tools/build.ps1 -Configuration Release
 
+# 本地 NuGet 包：完整构建后投递 nupkg 到本地源（默认 C:\Works\LocalNuGet；-SkipBuild 跳过构建）
+powershell tools/pack-local.ps1
+
 # SimNow 联调（示例，凭证请勿提交）
 dotnet run --project tools/live-test/LiveTest -- \
   --broker 9999 --user <user> --password <password> \
