@@ -51,17 +51,21 @@ function Get-NextSession {
     throw "no session found in the next 7 days"
 }
 
-function Invoke-Session {
-    param([string]$Kind)
+function Get-SessionDb {
+    param([string]$Kind, [datetime]$SessionTime)
+    $prefix = if ($Kind -eq "day") { "bars_day_" } else { "bars_night_" }
+    return Join-Path "data" ($prefix + $SessionTime.ToString("yyyyMMdd") + ".duckdb")
+}
 
-    $now = Get-Date
+function Invoke-Session {
+    param([string]$Kind, [datetime]$SessionTime)
+
+    $db = Get-SessionDb -Kind $Kind -SessionTime $SessionTime
     if ($Kind -eq "day") {
-        $db = Join-Path "data" ("bars_day_" + $now.ToString("yyyyMMdd") + ".duckdb")
         $minTime = $cfg.dayMinTime
         $duration = [int]$cfg.dayDurationSec
     }
     else {
-        $db = Join-Path "data" ("bars_night_" + $now.ToString("yyyyMMdd") + ".duckdb")
         $minTime = $cfg.nightMinTime
         $duration = [int]$cfg.nightDurationSec
     }
@@ -115,9 +119,22 @@ while ($true) {
         continue
     }
 
-    $code = Invoke-Session -Kind $next.Kind
+    $code = Invoke-Session -Kind $next.Kind -SessionTime $next.Time
     Write-Host ("[{0:yyyy-MM-dd HH:mm:ss}] {1} session finished, exit={2}" -f
         (Get-Date), $next.Kind, $code)
+
+    $db = Get-SessionDb -Kind $next.Kind -SessionTime $next.Time
+    if ($code -eq 0 -and (Test-Path $db)) {
+        Write-Host "rebuilding bars from ticks: $db"
+        python tools/tick-collector/rebuild_bars.py --db $db | Out-Host
+
+        if ($cfg.PSObject.Properties.Name -contains "backupDir" -and $cfg.backupDir) {
+            $name = [IO.Path]::GetFileNameWithoutExtension($db)
+            $dest = Join-Path $cfg.backupDir $name
+            Write-Host "backing up session to: $dest"
+            python tools/tick-collector/export_session.py --db $db --outdir $dest | Out-Host
+        }
+    }
 
     if ($Once) { exit $code }
     Start-Sleep -Seconds 60
